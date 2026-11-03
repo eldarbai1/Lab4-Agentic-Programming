@@ -1,0 +1,5 @@
+test.txt
+sessions/
+*.log
+__pycache__/
+*.pyc
