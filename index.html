@@ -11,6 +11,8 @@
   --user: #2f6fdb; --assistant: #8a3ffc; --system: #b7791f; --tool: #0f8a7e;
   --code-bg: #f3f4f7; --hl: #ffe58a; --flash: #ffe58a;
   --j-key: #8a3ffc; --j-str: #23893f; --j-num: #c25d00; --j-bool: #2f6fdb; --j-null: #6b7385;
+  /* token chart series (validated categorical slots 1-4) */
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -19,6 +21,7 @@
     --user: #6ea0ff; --assistant: #b78cff; --system: #e0b050; --tool: #3fc7b8;
     --code-bg: #171a20; --hl: #6b5a12; --flash: #5c4f12;
     --j-key: #b78cff; --j-str: #7fd48f; --j-num: #f0a050; --j-bool: #6ea0ff; --j-null: #8c94a5;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
   }
 }
 * { box-sizing: border-box; }
@@ -147,6 +150,37 @@ pre { margin: 0; white-space: pre-wrap; word-break: break-word; }
 summary:hover > .copy, .jv-bar .copy { opacity: 1; }
 .sse-row > summary { font-family: ui-monospace, monospace; font-size: 12px; }
 ::highlight(q) { background-color: var(--hl); color: inherit; }
+
+/* token panel */
+#tok-btn.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+#tokstat { cursor: pointer; } #tokstat:hover { text-decoration: underline dotted; }
+#tokpanel { margin: 10px 16px 0; background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
+.tp-head { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; margin-bottom: 8px; }
+.tp-head .tabs { margin-left: auto; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-bottom: 10px; }
+.tile { border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; }
+.tile-l { color: var(--dim); font-size: 12px; }
+.tile-v { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.tile-s { color: var(--dim); font-size: 11px; }
+.tp-chart { margin-bottom: 10px; }
+.tp-chart h4 { margin: 0 0 4px; font-size: 13px; display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; }
+.legend { font-weight: 400; color: var(--dim); display: inline-flex; gap: 12px; flex-wrap: wrap; }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+.tp-svg { width: 100%; }
+.tp-svg svg { display: block; }
+.tp-svg text { fill: var(--dim); font-size: 10px; font-family: ui-monospace, monospace; }
+.tp-svg .grid { stroke: var(--line); stroke-width: 1; }
+.tp-svg .axis { stroke: var(--dim); stroke-width: 1; }
+.tp-svg .hit { fill: transparent; cursor: pointer; }
+.tp-svg .hit:hover { fill: var(--fg); fill-opacity: .07; }
+#tp-tip { position: fixed; z-index: 30; pointer-events: none; background: var(--card); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; box-shadow: 0 2px 10px rgba(0,0,0,.25); font-size: 12px; min-width: 190px; }
+#tp-tip td { padding: 0 4px; } #tp-tip td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+.tp-tbl { border-collapse: collapse; width: 100%; font-size: 12px; }
+.tp-tbl th, .tp-tbl td { padding: 2px 8px; border-top: 1px solid var(--line); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tp-tbl th { color: var(--dim); font-weight: 600; }
+.tp-tbl th:nth-child(-n+3), .tp-tbl td:nth-child(-n+3) { text-align: left; }
+.tp-tbl a { color: var(--accent); cursor: pointer; }
+.sizeline { font-size: 12px; margin: 2px 0 4px; }
 </style>
 </head>
 <body>
@@ -156,7 +190,8 @@ summary:hover > .copy, .jv-bar .copy { opacity: 1; }
     <span id="conn" class="offline">offline</span>
     <span class="stat"><b id="s-ex">0</b> exchanges <span class="dim">(<b id="s-fly">0</b> in flight)</span></span>
     <span class="stat" id="errstat"><b id="s-err">0</b> errors</span>
-    <span class="stat">tokens: in <b id="s-in">0</b> · out <b id="s-out">0</b> · cache read <b id="s-cr">0</b> · cache write <b id="s-cw">0</b></span>
+    <button id="tok-btn" title="Show / hide the token panel">📊 Tokens</button>
+    <span class="stat" id="tokstat" title="Click to open the token panel">tokens: total <b id="s-tot">0</b> · in <b id="s-in">0</b> · out <b id="s-out">0</b> · cache read <b id="s-cr">0</b> · cache write <b id="s-cw">0</b></span>
     <span class="stat dim" id="s-sess"></span>
   </div>
   <div id="filters">
@@ -168,6 +203,29 @@ summary:hover > .copy, .jv-bar .copy { opacity: 1; }
   </div>
 </div>
 <button id="pill" hidden></button>
+<section id="tokpanel" hidden>
+  <div class="tp-head">
+    <b>Tokens</b>
+    <span class="dim">messages requests only · hover a bar for values · click a bar or row to open its card</span>
+    <span class="tabs"><button id="tp-v-chart" class="on">Chart</button><button id="tp-v-table">Table</button></span>
+  </div>
+  <div class="tiles" id="tp-tiles"></div>
+  <div id="tp-empty" class="dim" hidden>No token usage yet — it appears when the first response arrives.</div>
+  <div id="tp-charts">
+    <div class="tp-chart">
+      <h4>Context per request (input tokens)
+        <span class="legend"><span><i class="sw" style="background:var(--s1)"></i>Cache read</span><span><i class="sw" style="background:var(--s2)"></i>Cache write</span><span><i class="sw" style="background:var(--s3)"></i>Input (uncached)</span></span>
+      </h4>
+      <div class="tp-svg" id="tp-ctx"></div>
+    </div>
+    <div class="tp-chart">
+      <h4>Output tokens per request</h4>
+      <div class="tp-svg" id="tp-out"></div>
+    </div>
+  </div>
+  <div id="tp-table" hidden></div>
+</section>
+<div id="tp-tip" hidden></div>
 <main id="timeline"><div id="empty">Waiting for traffic… run <code>ANTHROPIC_BASE_URL=http://localhost:8041 claude</code></div></main>
 
 <script>
@@ -606,6 +664,7 @@ function flush() {
   updateStats();
   updateToolSelect();
   updatePill();
+  renderTokens(false);
 
   if (scrolled) {
     const target = anchor && anchor.isConnected ? anchor : anchorCard;
@@ -764,6 +823,13 @@ function renderRequest(ex) {
     else if (prev === v) label = `Tools ${v.label} (unchanged, ${list.length} tools)`;
     else { label = `Tools ${v.label} (changed from ${prev ? prev.label : '?'}; first seen in #${v.firstEx}, ${list.length} tools)`; cls += ' changed'; }
     out.append(lazyDetails('sec', el('span', { class: cls }, label), () => el('div', { class: 'secbody' }, renderTools(list)), isNew && list.length > 0));
+  }
+  // Where the request's input goes (rough estimate; exact totals are on the response side)
+  {
+    const est = v => v == null ? 0 : Math.round(JSON.stringify(v).length / 4);
+    const es = est(b.system), et = est(b.tools), em = est(b.messages);
+    out.append(el('div', { class: 'sizeline dim', title: 'Estimated as characters ÷ 4 of the JSON. The exact input count is in the response usage.' },
+      `Request size ≈ ${fmtK(es + et + em)} tokens (estimate): system ${fmtK(es)} · tools ${fmtK(et)} · messages ${fmtK(em)}`));
   }
   // 3/4. History delta + full history toggle
   const msgs = Array.isArray(b.messages) ? b.messages : [];
@@ -1013,7 +1079,12 @@ function syncResponse(ex) {
   ui.meta.textContent = '';
   const u = usageParts(ex.usage);
   const rows = [];
-  if (u) rows.push(['tokens', `in ${fmtN(u.in)} · out ${fmtN(u.out)} · cache read ${fmtN(u.cr || 0)} · cache write ${fmtN(u.cw || 0)}`]);
+  if (u) {
+    rows.push(['tokens', `in ${fmtN(u.in)} · out ${fmtN(u.out)} · cache read ${fmtN(u.cr || 0)} · cache write ${fmtN(u.cw || 0)}`]);
+    const ctx = (u.in || 0) + (u.cr || 0) + (u.cw || 0);
+    const hit = ctx ? (u.cr || 0) / ctx : null;
+    rows.push(['context', `${fmtN(ctx)} input tokens in total` + (hit != null ? ` · cache hit ${(hit * 100).toFixed(1)}%` : '')]);
+  }
   if (ex.msg && ex.msg.stop_reason !== undefined) rows.push(['stop_reason', String(ex.msg.stop_reason) + (ex.msg.stop_sequence ? ` (${ex.msg.stop_sequence})` : '')]);
   rows.push(['timing', `ttfb ${fmtMs(ex.ttfb)} · ttft ${fmtMs(ex.ttft)} · total ${ex.done ? fmtMs(ex.totalMs) : 'streaming…'}`]);
   if (ex.bytes != null) rows.push(['bytes', fmtN(ex.bytes)]);
@@ -1036,6 +1107,7 @@ function updateStats() {
   }
   $('#s-ex').textContent = fmtN(n); $('#s-fly').textContent = fmtN(fly);
   $('#s-err').textContent = fmtN(errs); $('#errstat').classList.toggle('has', errs > 0);
+  $('#s-tot').textContent = fmtK(tin + tout + cr + cw);
   $('#s-in').textContent = fmtK(tin); $('#s-out').textContent = fmtK(tout);
   $('#s-cr').textContent = fmtK(cr); $('#s-cw').textContent = fmtK(cw);
   let shown = 0; for (const ex of S.ex.values()) if (ex.ui && !ex.ui.card.hidden) shown++;
@@ -1144,6 +1216,170 @@ timeline.addEventListener('mouseover', e => {
   hoverId = id;
   if (b) document.querySelectorAll(`.blk[data-tu="${CSS.escape(id)}"]`).forEach(x => { if (x.dataset.side !== b.dataset.side) x.classList.add('partner'); });
 });
+
+/* ======================================================================== *
+ * Token panel: tiles, context chart, output chart, table view
+ * ======================================================================== */
+const CTX_SEGS = [
+  { key: 'cr', label: 'Cache read', color: 'var(--s1)' },
+  { key: 'cw', label: 'Cache write', color: 'var(--s2)' },
+  { key: 'in', label: 'Input (uncached)', color: 'var(--s3)' },
+];
+const OUT_SEGS = [{ key: 'out', label: 'Output', color: 'var(--s4)' }];
+let tokOpen = false, tokView = 'chart', tokSig = '', tokRowsById = new Map();
+try { tokOpen = localStorage.getItem('tokOpen') === '1'; tokView = localStorage.getItem('tokView') || 'chart'; } catch {}
+
+function tokenRows() {
+  const rows = [];
+  for (const ex of S.ex.values()) {
+    if (!ex.isMsg || !ex.usage) continue;
+    const u = usageParts(ex.usage);
+    const r = { id: ex.id, ts: ex.ts, model: ex.model || '', in: u.in || 0, cr: u.cr || 0, cw: u.cw || 0, out: u.out || 0, done: ex.done };
+    r.ctx = r.in + r.cr + r.cw;
+    rows.push(r);
+  }
+  return rows.sort((a, b) => a.id - b.id);
+}
+function niceMax(v) {
+  if (!(v > 0)) return 1;
+  const p = Math.pow(10, Math.floor(Math.log10(v)));
+  for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= v) return m * p;
+  return 10 * p;
+}
+const SVGNS = 'http://www.w3.org/2000/svg';
+function svgEl(tag, attrs) { const e = document.createElementNS(SVGNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; }
+function svgText(x, y, s, anchor) { const t = svgEl('text', { x, y, 'text-anchor': anchor }); t.textContent = s; return t; }
+function roundTop(x, y, w, h, r, fill) {
+  r = Math.max(0, Math.min(r, w / 2, h));
+  return svgEl('path', { fill, d: `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z` });
+}
+
+function barChart(holder, rows, segs) {
+  holder.textContent = '';
+  const W = Math.max(300, holder.clientWidth), H = 150, L = 52, R = 8, T = 8, B = 20, ph = H - T - B;
+  const maxBars = Math.max(1, Math.floor((W - L - R) / 5));
+  const shown = rows.slice(-maxBars);
+  const band = (W - L - R) / shown.length, bw = Math.min(24, Math.max(2, band - 2));
+  const total = r => segs.reduce((s, g) => s + r[g.key], 0);
+  const ymax = niceMax(Math.max(...shown.map(total)));
+  const svg = svgEl('svg', { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: 'img',
+    'aria-label': `${segs.map(s => s.label).join(', ')} tokens for ${shown.length} requests` });
+  for (const f of [0, 0.5, 1]) {
+    const y = T + ph - f * ph;
+    svg.append(svgEl('line', { x1: L, x2: W - R, y1: y, y2: y, class: f ? 'grid' : 'axis' }));
+    svg.append(svgText(L - 6, y + 3, fmtK(Math.round(ymax * f)), 'end'));
+  }
+  shown.forEach((r, i) => {
+    const x = L + i * band + (band - bw) / 2;
+    let y = T + ph;
+    const parts = segs.filter(g => r[g.key] > 0);
+    parts.forEach((g, j) => {
+      const h = r[g.key] / ymax * ph;
+      y -= h;
+      const isTop = j === parts.length - 1;
+      const gap = !isTop && h > 3 ? 2 : 0;          // 2px surface gap between stacked fills
+      const hh = Math.max(0.75, h - gap);
+      svg.append(isTop ? roundTop(x, y, bw, hh, 4, g.color) : svgEl('rect', { x, y: y + gap, width: bw, height: hh, fill: g.color }));
+    });
+    svg.append(svgEl('rect', { x: L + i * band, y: T, width: band, height: ph, class: 'hit', 'data-id': r.id }));
+  });
+  const step = Math.ceil(shown.length / Math.max(1, Math.floor((W - L - R) / 60)));
+  shown.forEach((r, i) => { if (i % step === 0) svg.append(svgText(L + i * band + band / 2, H - 5, '#' + r.id, 'middle')); });
+  holder.append(svg);
+  if (shown.length < rows.length) holder.append(el('div', { class: 'dim' }, `showing the last ${shown.length} of ${rows.length} requests`));
+}
+
+function tokenTable(rows) {
+  const box = $('#tp-table'); box.textContent = '';
+  const tbl = el('table', { class: 'tp-tbl' });
+  tbl.append(el('tr', null, ['#', 'time', 'model', 'input (uncached)', 'cache read', 'cache write', 'context', 'output', 'cache hit'].map(h => el('th', null, h))));
+  for (const r of rows.slice().reverse()) {
+    const hit = r.ctx ? (r.cr / r.ctx * 100).toFixed(1) + '%' : '–';
+    tbl.append(el('tr', null,
+      el('td', null, el('a', { onclick: () => openCard(r.id) }, '#' + r.id)),
+      el('td', null, hhmmss(r.ts)), el('td', null, r.model),
+      el('td', null, fmtN(r.in)), el('td', null, fmtN(r.cr)), el('td', null, fmtN(r.cw)),
+      el('td', null, el('b', null, fmtN(r.ctx))), el('td', null, fmtN(r.out)), el('td', null, hit)));
+  }
+  box.append(tbl);
+}
+
+function renderTokens(force) {
+  if (!tokOpen) return;
+  const panel = $('#tokpanel');
+  const rows = tokenRows();
+  const sig = tokView + '|' + panel.clientWidth + '|' + rows.map(r => `${r.id}:${r.in}:${r.cr}:${r.cw}:${r.out}`).join(',');
+  if (!force && sig === tokSig) return;
+  tokSig = sig;
+  tokRowsById = new Map(rows.map(r => [r.id, r]));
+  const t = rows.reduce((a, r) => { a.in += r.in; a.cr += r.cr; a.cw += r.cw; a.out += r.out; return a; }, { in: 0, cr: 0, cw: 0, out: 0 });
+  const allIn = t.in + t.cr + t.cw;
+  const hit = allIn ? t.cr / allIn : null;
+  const last = rows[rows.length - 1];
+  const peak = rows.reduce((m, r) => r.ctx > (m ? m.ctx : -1) ? r : m, null);
+  const tile = (label, value, sub) => el('div', { class: 'tile' }, el('div', { class: 'tile-l' }, label), el('div', { class: 'tile-v' }, value), sub ? el('div', { class: 'tile-s' }, sub) : null);
+  const tiles = $('#tp-tiles'); tiles.textContent = '';
+  tiles.append(
+    tile('Total tokens', fmtN(t.in + t.cr + t.cw + t.out), `${rows.length} request${rows.length === 1 ? '' : 's'}`),
+    tile('Input (uncached)', fmtN(t.in)),
+    tile('Cache read', fmtN(t.cr)),
+    tile('Cache write', fmtN(t.cw)),
+    tile('Output', fmtN(t.out)),
+    tile('Cache hit ratio', hit == null ? '–' : (hit * 100).toFixed(1) + '%', 'cache read ÷ all input tokens'),
+    tile('Latest context', last ? fmtN(last.ctx) : '–', last ? `#${last.id}` + (peak ? ` · peak ${fmtK(peak.ctx)} in #${peak.id}` : '') : null));
+  $('#tp-empty').hidden = rows.length > 0;
+  $('#tp-charts').hidden = tokView !== 'chart' || !rows.length;
+  $('#tp-table').hidden = tokView !== 'table' || !rows.length;
+  $('#tp-v-chart').classList.toggle('on', tokView === 'chart');
+  $('#tp-v-table').classList.toggle('on', tokView === 'table');
+  if (!rows.length) return;
+  if (tokView === 'chart') { barChart($('#tp-ctx'), rows, CTX_SEGS); barChart($('#tp-out'), rows, OUT_SEGS); }
+  else tokenTable(rows);
+}
+
+function openCard(id) {
+  const ex = S.ex.get(id); if (!ex || !ex.ui) return;
+  ex.ui.card.hidden = false;
+  setExpanded(ex, true, true);
+  window.scrollTo({ top: ex.ui.card.getBoundingClientRect().top + window.scrollY - headerH() - 8 });
+  ex.ui.card.classList.remove('flash'); void ex.ui.card.offsetWidth; ex.ui.card.classList.add('flash');
+}
+
+function setTokOpen(v) {
+  tokOpen = v;
+  $('#tokpanel').hidden = !v;
+  $('#tok-btn').classList.toggle('on', v);
+  try { localStorage.setItem('tokOpen', v ? '1' : '0'); } catch {}
+  if (v) renderTokens(true);
+}
+function setTokView(v) { tokView = v; try { localStorage.setItem('tokView', v); } catch {} renderTokens(true); }
+$('#tok-btn').addEventListener('click', () => setTokOpen(!tokOpen));
+$('#tokstat').addEventListener('click', () => setTokOpen(true));
+$('#tp-v-chart').addEventListener('click', () => setTokView('chart'));
+$('#tp-v-table').addEventListener('click', () => setTokView('table'));
+let rsTimer = null;
+window.addEventListener('resize', () => { clearTimeout(rsTimer); rsTimer = setTimeout(() => renderTokens(false), 150); });
+
+const tip = $('#tp-tip');
+$('#tp-charts').addEventListener('mousemove', e => {
+  const h = e.target.closest && e.target.closest('.hit');
+  const r = h && tokRowsById.get(+h.dataset.id);
+  if (!r) { tip.hidden = true; return; }
+  tip.textContent = '';
+  const row = (color, label, v, bold) => el('tr', null, el('td', null, color ? el('i', { class: 'sw', style: `background:${color}` }) : null, label), el('td', null, bold ? el('b', null, fmtN(v)) : fmtN(v)));
+  tip.append(el('div', null, el('b', null, `#${r.id}`), el('span', { class: 'dim' }, ` ${hhmmss(r.ts)} · ${r.model}`)),
+    el('table', null,
+      row('var(--s1)', 'Cache read', r.cr), row('var(--s2)', 'Cache write', r.cw), row('var(--s3)', 'Input (uncached)', r.in),
+      row(null, 'Context total', r.ctx, true), row('var(--s4)', 'Output', r.out)),
+    el('div', { class: 'dim' }, 'click to open the card'));
+  tip.hidden = false;
+  const x = Math.min(e.clientX + 14, window.innerWidth - tip.offsetWidth - 8);
+  const y = e.clientY + 14 + tip.offsetHeight > window.innerHeight ? e.clientY - tip.offsetHeight - 10 : e.clientY + 14;
+  tip.style.left = x + 'px'; tip.style.top = y + 'px';
+});
+$('#tp-charts').addEventListener('mouseleave', () => { tip.hidden = true; });
+$('#tp-charts').addEventListener('click', e => { const h = e.target.closest && e.target.closest('.hit'); if (h) { tip.hidden = true; openCard(+h.dataset.id); } });
+setTokOpen(tokOpen);
 
 /* ======================================================================== *
  * Connection

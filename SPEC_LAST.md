@@ -3,8 +3,8 @@
 A browser dashboard that shows, live, every request Claude Code (or another agent) sends
 through `proxy.py` and every response the API streams back. **The newest traffic is shown first.**
 
-Status: **v1.2, matches Build 1** (branch `build-1`, commit `fa15c7b`, which includes the
-v1.2 user-prompt change). All MVP items (§2) are implemented. No **[Stretch]** items are implemented yet.
+Status: **v1.3, matches Build 1** (branch `build-1`). v1.2 added the user-prompt display and
+v1.3 the token panel. All MVP items (§2) are implemented. No **[Stretch]** items are implemented yet.
 See `SPEC_HISTORY.md` for what changed from the original spec and why.
 
 Files: `proxy.py` (proxy, event bus and dashboard server) and `index.html` (the whole frontend).
@@ -45,6 +45,7 @@ The lab build includes **only** the following. Everything else in this spec is m
 | 10 | Error display                     | §14          | HTTP errors, stream errors, proxy errors and tool results with `is_error` are shown in red, with an error count in the header. |
 | 11 | Basic token/timing stats          | §11          | Per card: input/output/cache tokens, time to first token and total time. Header: number of exchanges, errors and total tokens. |
 | 12 | User prompt shown clearly *(added v1.2)* | §6.3     | The text the user typed, with Claude Code's `<system-reminder>` blocks removed, is shown on the collapsed card and in a highlighted box at the top of the Request column. |
+| 13 | Token panel *(added v1.3)*        | §11.1        | A toggleable panel with token totals, a stacked context-per-request chart, an output-per-request chart and a table view, plus a request size estimate on each card. |
 
 **Stretch goals**, built only if time remains:
 - persistence to disk and the session picker (§16)
@@ -336,6 +337,52 @@ Claude Code wraps the user's typed text in the same message as injected context 
   - total input, output and cache tokens for the session
   - connection status (§4)
 
+### 11.1 Token panel *(added in v1.3)*
+
+- **Opening.**
+  - A **📊 Tokens** button in the header opens and closes the panel, and clicking the header
+    token totals opens it too.
+  - The open/closed state and the chart/table choice are remembered per browser
+    (`localStorage`, best effort).
+  - The panel sits above the timeline and is not sticky.
+- **Header.** The token stats gain a `total` figure: input + output + cache read + cache
+  write.
+- **Rows.** One row per messages exchange that has `usage`, in exchange order:
+  - `input` (uncached `input_tokens`), `cache read`, `cache write` and `output`;
+  - `context` = input + cache read + cache write.
+- **Tiles.** Total tokens with the request count; input (uncached); cache read; cache write;
+  output; cache hit ratio; latest context, with the peak context and its exchange.
+- **Cache hit ratio** = cache read ÷ (input + cache read + cache write). This replaces the
+  stretch definition "cache_read / (input + cache_read)", because the API's `input_tokens`
+  excludes cached tokens and that formula is about 100% on every Claude Code request.
+- **Chart 1, context per request.** Stacked bars of cache read, cache write and input
+  (uncached).
+  - Colours are categorical slots 1–3 (blue, orange, aqua), with separate light and dark
+    steps, validated with the dataviz palette validator.
+  - Bars are at most 24 px wide, with a 2 px gap between segments, square at the baseline
+    and with 4 px rounded tops.
+  - The y axis is one axis with gridlines at 0, ½ and max.
+  - The legend is shown above the chart.
+- **Chart 2, output per request.** Single-series bars in slot 4 (yellow). Output is a
+  separate chart rather than a second axis, because it is one to two orders of magnitude
+  smaller than the context.
+- **Interaction.**
+  - Hovering a request's column shows a tooltip with all five values.
+  - Clicking a bar, or a table row's `#id`, opens that card and scrolls to it.
+  - If there are too many requests for 5 px per bar, only the most recent ones are drawn,
+    with a "showing the last N of M" note.
+- **Table view.** A Chart/Table toggle. The table lists every row newest first: #, time,
+  model, input, cache read, cache write, context, output and cache hit. This is also the
+  accessible alternative for colours below 3:1 contrast in light mode.
+- **Updates.** The panel re-renders in the same animation-frame flush as the cards, only
+  when token data or the panel width changes, and is covered by the same scroll
+  anchoring.
+- **Per card.**
+  - Request side: `Request size ≈ N tokens (estimate): system · tools · messages`, estimated
+    as JSON characters ÷ 4.
+  - Response side: a `context` row with the exact total input tokens and that request's
+    cache hit percentage.
+
 ### [Stretch] Advanced statistics
 
 - Median and p95 for time to first token and for total time
@@ -527,6 +574,8 @@ ANTHROPIC_BASE_URL=http://localhost:8041 claude    # in a second terminal
 7. No full auth token appears anywhere in the browser (or, later, in the JSONL files).
 8. *(v1.2)* After typing a question in Claude Code, the question itself, without the
    system-reminder text, is readable on the newest card without expanding anything.
+9. *(v1.3)* Opening the token panel shows session token totals and a per-request chart in
+   which context growth and compaction are visible, and clicking a bar opens that request.
 
 ### Verification status (Build 1)
 
@@ -540,6 +589,7 @@ ANTHROPIC_BASE_URL=http://localhost:8041 claude    # in a second terminal
 | 6 | Pass | 60 exchanges with a 60 KB system prompt and 120-message history: expanding 10 cards took 24 ms, search 7 ms, opening the full history 7 ms. |
 | 7 | Pass | The page DOM was searched for the token prefix: only the 16-character redacted form appears. |
 | 8 | Pass | Against captured real traffic: `💬 read test.txt and tell me the secret word` appears on the card and in the prompt box. |
+| 9 | Pass | *(v1.3)* Synthetic 40-request session with compaction at #25, in headless Chrome, dark and light: tiles, both charts, tooltip, click-to-card, table and per-card rows all correct. |
 
 ## 19. Open questions (deferred)
 

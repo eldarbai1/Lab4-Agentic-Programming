@@ -9,9 +9,10 @@ The current full specification is **`SPEC_LAST.md`**. The original is kept uncha
 | v1.0    | 2026-11-03 | Pre-lab design, commit `cba1a15` (`main`) | Original spec: MVP plus stretch goals. Nothing implemented. |
 | v1.1    | 2026-11-03 | Build 1 implementation                   | Technical adjustments found while building and testing against real Claude Code traffic. |
 | v1.2    | 2026-11-03 | User feedback on Build 1                 | The user's question must be clearly visible. Added user-prompt extraction and display. |
+| v1.3    | 2026-11-03 | User request on Build 1                  | A feature that shows the number of tokens. Added the token panel (tiles, charts, table) and per-card size and context rows. |
 
-Build 1 code: branch `build-1`, commit `fa15c7b` on `eldarbai1/Lab4-Agentic-Programming`,
-covering v1.1 and v1.2.
+Build 1 code: branch `build-1` on `eldarbai1/Lab4-Agentic-Programming`. Commit `fa15c7b`
+covers v1.1 and v1.2, and the following commit adds v1.3.
 
 ---
 
@@ -139,6 +140,37 @@ real Claude Code traffic looks. They were found by running `claude -p` through t
 
 ---
 
+## v1.3: token panel (user request)
+
+- **Request:** "make me another feature in the dashboard which will show the number of
+  tokens."
+- **Context:** v1.2 already showed tokens per card and as header totals, so v1.3 adds what
+  those don't show: the session as a whole, how the context grows over time, and where a
+  request's tokens go.
+- **Change** (new §11.1, MVP item 13):
+  - a **📊 Tokens** panel with seven summary tiles;
+  - a stacked **context per request** chart (cache read / cache write / uncached input);
+  - a separate **output per request** chart;
+  - hover tooltips, click-to-card and a **table** view;
+  - a header `total`;
+  - a per-card `Request size ≈` estimate (system / tools / messages) and an exact `context`
+    row with that request's cache hit.
+- **Decisions:**
+  - **Cache hit ratio.** Redefined as cache read ÷ *all* input tokens, because the API's
+    `input_tokens` excludes cached tokens and the stretch formula from v1.0 shows about
+    100% on every Claude Code request.
+  - **Output chart.** Output is a separate chart instead of a second y-axis on the context
+    chart, because the scales differ by about 50×.
+  - **Colours.** The colours are validated categorical slots with their own light and dark
+    steps. The table view provides the relief that the validator requires for two
+    light-mode colours below 3:1 contrast.
+  - **Size estimate.** The per-section size is an estimate (chars ÷ 4), because the API
+    reports only totals. It is labelled as such.
+- **Acceptance criterion 9** was added. This covers part of the §11 "advanced statistics"
+  stretch goal: cache hit ratio and context size per request.
+
+---
+
 ## Not done yet (carried forward)
 
 All **[Stretch]** items in `SPEC_LAST.md` are still open:
@@ -147,7 +179,8 @@ All **[Stretch]** items in `SPEC_LAST.md` are still open:
 - system, tool and history diffs, plus the Library panel
 - conversation thread lanes
 - the Tool calls panel
-- advanced statistics
+- the rest of the advanced statistics (median/p95 timings, tool and model breakdowns,
+  filtered-subset stats)
 - keyboard shortcuts
 - regex search, auto-opening matches, extra filters and URL-hash state
 - the Pause button and frame-batched redraws beyond what exists
